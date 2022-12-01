@@ -1,0 +1,35 @@
+\usepackage{xcolor}
+
+\hypersetup{
+  colorlinks,
+  allcolors=.,
+  urlcolor=blue,
+}
+
+\definecolor{BG}{gray}{0.9}
+\definecolor{JuliaBlue}{HTML}{4063D8}
+\definecolor{JuliaBlueLight}{HTML}{8699d8}
+\definecolor{JuliaGreen}{HTML}{389826}
+\definecolor{JuliaGreenLight}{HTML}{b2d8ab}
+\definecolor{JuliaRed}{HTML}{CB3C33}
+\definecolor{JuliaRedLight}{HTML}{CC726C}
+\definecolor{JuliaPurple}{HTML}{9558B2}
+\definecolor{JuliaPurpleLight}{HTML}{a789b5}
+
+\usepackage{mdframed}
+
+\mdfdefinestyle{code}{hidealllines=true}
+
+\usepackage{minted}
+\usemintedstyle{tango}
+
+\newenvironment{codebox}
+    {
+      \vspace*{1em}
+      \begin{mdframed}[style=code, backgroundcolor=BG]
+    }
+    {
+    \end{mdframed}
+    }
+
+\newcommand{\codeinline}[1]{\mintinline{julia}{#1}}

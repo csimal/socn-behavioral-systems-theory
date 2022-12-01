@@ -1,0 +1,194 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc} % use a civilized charset
+\usepackage[T1]{fontenc}
+\usepackage[a4paper,left=3cm,right=3cm,top=3cm,bottom=3cm]{geometry}
+\usepackage[english]{babel} % hon hon hon
+\usepackage{hhline}% double underline
+\usepackage{amsmath} % Math symbols
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+
+\usepackage[bookmarksopen=true, hidelinks]{hyperref}
+\usepackage{bookmark}
+\usepackage[toc,page]{appendix}
+\usepackage{url}
+\usepackage{color}
+\usepackage{shadow}
+\usepackage{fancybox}
+\usepackage[babel=true]{csquotes}
+\usepackage{parskip}
+\usepackage{minted}
+\usepackage{mathrsfs}
+
+\usepackage{fontspec}
+\setmainfont{Gentium Book Basic}
+\setmonofont{JuliaMono}[Scale=MatchLowercase]
+
+\input{styles.tex}
+%\setlength\parskip{1em}
+
+\newtheorem{thm}{Théorème}[section] 
+\newtheorem{coro}{Corollaire}[section]
+\newtheorem{lem}{Lemme}[section]
+\newtheorem{prop}{Proposition}[section]
+
+\def\N{\mathbb{N}}
+\def\R{\mathbb{R}}
+\def\Q{\mathbb{Q}}
+\def\Z{\mathbb{Z}}
+\def\C{\mathbb{C}}
+
+\def\B{\mathscr{B}}
+
+\author{Cédric Simal}
+\date{\today}
+
+\title{Behavioral Approach to Dynamical Systems: Implementation of a Julia package}
+
+
+\bibliographystyle{unsrt} 
+\pagestyle{plain} 
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+    As part of the SOCN Doctoral School on Behavioral Systems Theory, we implemented a small Julia package providing tools from Behavioral Theory for the study of Dynamical Systems. We document the main features of the package, and illustrate them with examples.
+\end{abstract}
+
+\section*{Introduction}
+
+\section*{Notes on Notations}
+In the notation used throughout this document, we depart slightly from the one used in the course material. In particular, we use the subscript notation $w = [w_0, w_1, \dots]$, rather than the functional one for elements of $(\R^q)^\N$. We also abuse the original notation by using $\B_T$ to denote restricted behaviors.
+
+In the rest of this document, unless mentioned otherwise, we implictly assume to be working with an LTI system with $n$ states, $m$ inputs $p$ outputs and lag $\ell$. Moreover, we define $q=m+p$ to be the number of observables of the system at our disposition.
+
+\section{Elementary Functions}
+In the making of this package, several utility functions where quickly needed.
+\subsection*{Hankel and Multiplication Matrices}
+The Hankel and Multiplication matrix structures intervene at multiple points throughout the course. Based on the appendix to the exercises, we implemented functions for computing these matrices, and their orthogonal projections for both the scalar and block variants.
+
+\begin{codebox}
+\begin{minted}{julia-repl}
+julia> hankel_matrix(1:5, 2)
+2×4 Matrix{Int64}:
+ 1  2  3  4
+ 2  3  4  5
+
+julia> x = [1:5;;1:5]'
+2×5 adjoint(::Matrix{Int64}) with eltype Int64:
+ 1  2  3  4  5
+ 1  2  3  4  5
+
+julia> hankel_matrix(x, 2)
+4×4 Matrix{Int64}:
+ 1  2  3  4
+ 1  2  3  4
+ 2  3  4  5
+ 2  3  4  5
+
+julia> hankel_matrix([1:5,1:3], 2)
+2×6 Matrix{Int64}:
+ 1  2  3  4  1  2
+ 2  3  4  5  2  3 
+\end{minted}
+\end{codebox}
+
+Our implementation currently uses dense matrices filled out with the correct elements. This is somewhat inefficient due to the structure of e.g. the Hankel matrix. A good direction for future developments would be to implement those matrices in lazy form, which would simply reference the data from the original trajectory without allocating a new array. 
+
+\subsection*{Random state space systems and random trajectories}
+For most of the basic features for Control Systems, rely on the \texttt{ControlSystems} package \cite{controlsystems_jl}, which provides an interface very similar to the Matlab Control Toolbox. One function that was missing however, was \codeinline{drss}, which generates a random discrete-time state space model. We based ourselves on the implementation from \cite{python-control}. This function takes as input a triplet $(n,m,p)$ denoting the desired numbers of states, inputs and outputs and generates a random state space model with those dimensions.
+
+\begin{codebox}
+\begin{minted}{julia-repl}
+julia> sys = drss(2,1,1)
+ControlSystemsBase.StateSpace{ControlSystemsBase.Discrete{Float64}, Float64}
+A = 
+  1.1495107582998578   0.6155356737880789
+ -0.9879718937104236  -0.12389286364849494
+B = 
+ -0.5554201977346566
+  1.3123220191281468
+C = 
+ -0.873958753779606  -2.8332765216867277
+D = 
+ 0.0
+
+Sample Time: 1.0 (seconds)
+Discrete-time state-space model
+\end{minted}
+\end{codebox}
+
+In addition to this, since many algorithms in the course take an arbitrary trajectory of the system being studied as input, we implemented a function \codeinline{random_trajectory} which takes a state-space system and time to generate a random trajectory of the appropriate length.
+
+\begin{codebox}
+\begin{minted}{julia-repl}
+julia> w = random_trajectory(sys, 3)
+2×3 Matrix{Float64}:
+  0.106744  0.895347   0.849628
+ -1.20746   0.609445  -1.48571
+\end{minted}
+\end{codebox}
+
+Another function in this category is \codeinline{canonical_perturbation} which takes a triplet $(m,p,T)$ as argument and returns the permutation that maps a vector of the form $[u_1, \dots, u_T, y_1, \dots, y_T]'$ to $[u_1 y_1, \dots, u_T y_T]'$
+
+\section{Behavior Representations}
+The behavior of an LTI system can be represented in multiple ways, some of which were to be implemented as exercises. Broadly speaking, a representation of a behavior $\B$ is a parametrization that enables one to check whether a given trajectory is in $\B$, and to sample trajectories from $\B$. Since the behaviors of LTI systems are shift-invariant subspaces, most representations involve finding a basis of the restricted behaviors $\B_T$ or its orthogonal complement.
+
+\subsection*{State Space and Data-Driven Representation}
+Based on exercise 1, we implemented functions for constructing a basis of the restricted behavior $\B_T$ of an LTI in state space form in three different ways.
+
+The model based approached, as outlined in the solution provided, involves explicitly constructing the matrix that maps a vector containing the initial condition $x_0$ and input $u$ to the trajectory vector containing $u$ and the output $y$, essentially ``unrolling'' the evolution equations. This is done by the function \codeinline{ss2BT_modelbased}.
+
+The data-driven approach instead uses a single trajectory of sufficient length of the system to construct its Hankel matrix, whose range spans $\B_T$. The function \codeinline{ss2BT_hankel} implements this approach. We also provide the function \codeinline{ss2BT_datadriven}, based on the example given during the course of sampling $qT$ random trajectories. The Hankel approach is obviously much more efficient.
+
+\subsection*{Kernel Representation}
+The kernel representation of the behavior $\B$ of a system with $p$ outputs, $m$ inputs and lag $\ell$ is parametrized by an $p \times q(\ell + 1)$ matrix $R$ such that for any trajectory $w \in \B$
+$$ R(\sigma) w = 0, $$
+where $R(\sigma)$ is a polynomial of degree $l$ with matrix coefficients applied the shift operator $\sigma$.
+
+For restricted behaviors, the matrix $R$ completely characterizes $\B_{\ell+1}$ and can be used to generate kernel representations of $\B_T$ for $T \ge \ell +1$ with the Multiplication matrix discussed in the first section.
+
+In the data-driven approach, finding a parameter $R$ is trivial. Given a sufficiently long trajectory $w_d$, one need simply compute a basis of the left-kernel of $\mathscr{H}_{\ell+1}$, i.e. the kernel of $\mathscr{H}_{\ell+1}'$. This feature is provided by the function \codeinline{ss2r_datadriven}.
+
+For the model based approach, a little more work is required. If we take the evolution matrix used in the model based approach in exercise 1, for length $\ell + 1$, we obtain
+$$ w = \begin{bmatrix}
+  u \\
+  y
+\end{bmatrix} = \begin{bmatrix}
+  0 & I_{m(\ell+1)} \\
+  \mathscr{O}_{\ell+1} & \mathscr{C}_{\ell+1}
+\end{bmatrix} \begin{bmatrix}
+  x_1 \\
+  u
+\end{bmatrix}.$$
+
+Since the lag of the system is equal to $\ell$, we know that the observability matrix $\mathscr{O}_\ell$ has rank $n$, hence we can recover the initial condition $x_1$ from the first $\ell$ samples of the trajectory, that is
+$$ x_1 = \mathscr{O}_\ell^\dagger (\mathscr{C}_\ell u_{1:\ell} - y_{1:\ell}), $$
+where $\dagger$ denotes the pseudo-inverse, and the notations $u_{1:\ell}$, $y_{1:\ell}$ denote the vector of the first $\ell$ samples of $u$ (respectively for $y$). 
+
+We can inject this in the expression for $y_{\ell+1}$ to obtain an expression that only involves the input and outputs
+\begin{align*}
+  y_{\ell+1} &= Cx_{\ell+1} + Du_{\ell+1}, \\
+   &= CA^\ell x_1 + H_{1:\ell} u_{1:\ell} + Du_{\ell+1}, \\
+   &= CA^\ell \mathscr{O}_\ell (\mathscr{C}_\ell u_{1:\ell} - y_{1:\ell}) + H_{1:\ell+1} u_{1:\ell+1},
+\end{align*}
+where $H_{1:\ell+1} = [H_{1:\ell} ~D]$ consists of the last $p$ rows of $\mathscr{C}_{\ell+1}$.
+
+We can rearrange this into 
+$$ CA^\ell \mathscr{O}_\ell^\dagger \mathscr{C}_\ell u_{1:\ell} + H_{1:\ell+1} u_{1:\ell+1} - CA^\ell \mathscr{O}_\ell^\dagger y_{1:\ell} -y_{\ell+1} = 0,$$
+from which we can obtain the desired parameter matrix $R$. In our package, this is implemented by the function \codeinline{ss2r_modelbased}.
+
+\section{Calculating the lag and complexity}
+
+
+\section{Most Powerful Unfalsified Model}
+
+\section{Data-Driven Interpolation and Approximation}
+
+
+
+\bibliography{sources}
+
+\end{document}
