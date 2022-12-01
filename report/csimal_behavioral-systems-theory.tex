@@ -41,6 +41,8 @@
 
 \def\B{\mathscr{B}}
 
+\def\rank{\operatorname{rank}}
+
 \author{Cédric Simal}
 \date{\today}
 
@@ -58,14 +60,22 @@
 \end{abstract}
 
 \section*{Introduction}
+This document presents a small Julia package implementing tools from Behavioral Systems Theory, a subdomain of Systems Theory that concerns itself with the study of dynamical systems through their sets of \textit{trajectories}, called their \textit{Behaviors}. In this package, we focus mainly on the behaviors of Linear Time Invariant Systems.
 
-\section*{Notes on Notations}
-In the notation used throughout this document, we depart slightly from the one used in the course material. In particular, we use the subscript notation $w = [w_0, w_1, \dots]$, rather than the functional one for elements of $(\R^q)^\N$. We also abuse the original notation by using $\B_T$ to denote restricted behaviors.
+The source code for the package can be found at the following webpage under the MIT open source license.\\
+\url{https://github.com/csimal/BehavioralSystems.jl}.
 
-In the rest of this document, unless mentioned otherwise, we implictly assume to be working with an LTI system with $n$ states, $m$ inputs $p$ outputs and lag $\ell$. Moreover, we define $q=m+p$ to be the number of observables of the system at our disposition.
+The repository also contains a Jupyter Notebook showcasing the features of the package. Most of the code snippets presented here can be run using it.
+
+As an important notice, while we believe that the algorithms implemented in the package are correct in theory, some of the results we obtain are incorrect, and we could not correct them in time. That being said, we believe fixing these errors would not take a significant effort.
+
+\section*{Remarks on Notations}
+In the notation used throughout this document, we depart slightly from the one used in the course material. In particular, we use the subscript notation $w = [w_0, w_1, \dots]$, rather than the functional one for elements of $(\R^q)^\N$.
+
+For the rest of this document, unless mentioned otherwise, we implicitly assume to be working with an LTI system with $n$ states, $m$ inputs $p$ outputs and lag $\ell$. Moreover, we define $q=m+p$ to be the number of observables of the system at our disposition.
 
 \section{Elementary Functions}
-In the making of this package, several utility functions where quickly needed.
+In the making of this package, several utility functions where quickly needed. We document them here.
 \subsection*{Hankel and Multiplication Matrices}
 The Hankel and Multiplication matrix structures intervene at multiple points throughout the course. Based on the appendix to the exercises, we implemented functions for computing these matrices, and their orthogonal projections for both the scalar and block variants.
 
@@ -131,24 +141,30 @@ julia> w = random_trajectory(sys, 3)
 \end{minted}
 \end{codebox}
 
-Another function in this category is \codeinline{canonical_perturbation} which takes a triplet $(m,p,T)$ as argument and returns the permutation that maps a vector of the form $[u_1, \dots, u_T, y_1, \dots, y_T]'$ to $[u_1 y_1, \dots, u_T y_T]'$
+Another function in this category is \codeinline{canonical_perturbation} which takes a triplet $(m,p,T)$ as argument and returns the permutation that maps a vector of the form $[u_1, \dots, u_T, y_1, \dots, y_T]'$ to $[u_1 y_1, \dots, u_T y_T]'$.
 
 \section{Behavior Representations}
-The behavior of an LTI system can be represented in multiple ways, some of which were to be implemented as exercises. Broadly speaking, a representation of a behavior $\B$ is a parametrization that enables one to check whether a given trajectory is in $\B$, and to sample trajectories from $\B$. Since the behaviors of LTI systems are shift-invariant subspaces, most representations involve finding a basis of the restricted behaviors $\B_T$ or its orthogonal complement.
+The behavior of an LTI system can be represented in multiple ways, some of which were to be implemented as exercises. Broadly speaking, a representation of a behavior $\B$ is a parametrization that enables one to check whether a given trajectory is in $\B$, and to sample trajectories from $\B$. Since the behaviors of LTI systems are shift-invariant subspaces, most representations involve finding a basis of the restricted behaviors $\B|_T$ or its orthogonal complement.
 
 \subsection*{State Space and Data-Driven Representation}
-Based on exercise 1, we implemented functions for constructing a basis of the restricted behavior $\B_T$ of an LTI in state space form in three different ways.
+Based on exercise 1, we implemented functions for constructing a basis of the restricted behavior $\B|_T$ of an LTI in state space form in three different ways.
 
 The model based approached, as outlined in the solution provided, involves explicitly constructing the matrix that maps a vector containing the initial condition $x_0$ and input $u$ to the trajectory vector containing $u$ and the output $y$, essentially ``unrolling'' the evolution equations. This is done by the function \codeinline{ss2BT_modelbased}.
 
 The data-driven approach instead uses a single trajectory of sufficient length of the system to construct its Hankel matrix, whose range spans $\B_T$. The function \codeinline{ss2BT_hankel} implements this approach. We also provide the function \codeinline{ss2BT_datadriven}, based on the example given during the course of sampling $qT$ random trajectories. The Hankel approach is obviously much more efficient.
 
+\begin{figure}
+  \centering
+  \includegraphics[height=.25\textheight]{figures/ss2BT.pdf}
+  \caption{Comparison of the basis of $\B|_T$ obtained through the different methods. The model-based basis is permuted so that its rows are in the same order as the other two.}
+\end{figure}
+
 \subsection*{Kernel Representation}
 The kernel representation of the behavior $\B$ of a system with $p$ outputs, $m$ inputs and lag $\ell$ is parametrized by an $p \times q(\ell + 1)$ matrix $R$ such that for any trajectory $w \in \B$
 $$ R(\sigma) w = 0, $$
-where $R(\sigma)$ is a polynomial of degree $l$ with matrix coefficients applied the shift operator $\sigma$.
+where $R(\sigma)$ is a polynomial of degree $l$ with matrix coefficients applied to the shift operator $\sigma$.
 
-For restricted behaviors, the matrix $R$ completely characterizes $\B_{\ell+1}$ and can be used to generate kernel representations of $\B_T$ for $T \ge \ell +1$ with the Multiplication matrix discussed in the first section.
+For restricted behaviors, the matrix $R$ completely characterizes $\B|_{\ell+1}$ and can be used to generate kernel representations of $\B|_T$ for $T \ge \ell +1$ with the Multiplication matrix discussed in the first section.
 
 In the data-driven approach, finding a parameter $R$ is trivial. Given a sufficiently long trajectory $w_d$, one need simply compute a basis of the left-kernel of $\mathscr{H}_{\ell+1}$, i.e. the kernel of $\mathscr{H}_{\ell+1}'$. This feature is provided by the function \codeinline{ss2r_datadriven}.
 
@@ -180,15 +196,81 @@ We can rearrange this into
 $$ CA^\ell \mathscr{O}_\ell^\dagger \mathscr{C}_\ell u_{1:\ell} + H_{1:\ell+1} u_{1:\ell+1} - CA^\ell \mathscr{O}_\ell^\dagger y_{1:\ell} -y_{\ell+1} = 0,$$
 from which we can obtain the desired parameter matrix $R$. In our package, this is implemented by the function \codeinline{ss2r_modelbased}.
 
-\section{Calculating the lag and complexity}
+Finally, the function \codeinline{r2BT} lets us convert from a kernel representation to a basis representation of the behavior.
 
+\section{Calculating the lag and complexity}
+The lag $\ell$ of a system can be defined as the smallest number of steps that need to be sampled to recover the state from the inputs and output. In other words, $\ell$ is the smallest number such that the observability matrix $\mathscr{O}_\ell$ has rank $n$. This exact approach is used in the function \codeinline{lag_modelbased}.
+
+For the data-driven approach, we provide the function \codeinline{lag_datadriven} to compute the lag from a trajectory, both when we have prior knowledge of $n$ and $m$ and when we don't.
+
+Our scheme for computing $\ell$ is as follows. Given estimates of $m$ and $n$, we know that $\ell$ must be smaller than $n$, and we use bisection search to find the smallest $l$ such that $\rank \mathscr{H}_{l} = m*l + n$. When computing the lag of a state-space system, we have access to the exact values of $m$ and $n$, but when given only a finite trajectory $w_d$, we estimate $m$ and $n$ by finding the largest $l$ such that $\rank \mathscr{H}_l (w_d) < \rank \mathscr{H}_{l+1}(w_d)$. This lets us estimate the complexity of the behavior, even based on only a single sample.
+
+\begin{codebox}
+\begin{minted}{julia-repl}
+julia> sys = drss(3,2,1);
+
+julia> (lag_modelbased(sys), lag_datadriven(sys))
+(3, 3)
+
+julia> w = random_trajectory(sys, 15);
+
+julia> lag_datadriven(w)
+3
+\end{minted}
+\end{codebox}
 
 \section{Most Powerful Unfalsified Model}
+Computing the Most Powerful Unfalsified Model $\B_{MPUM}(w_d)$ of a finite trajectory $w_d$ is fairly straightforward. From a candidate $l$ between $1$ and $\ell_{\max} = \lfloor \frac{T+1}{q+1} \rfloor$, we estimate the corresponding $m$ and $n$ from $\rank \mathscr{H}_l (w_d)$ and $\rank \mathscr{H}_{l+1}(w_d)$, and iterate over all possible values of $l$ to find the minimizer. This feature is available through the function \codeinline{complexity_mpum}.
+
+Given the optimal lag $\ell$, we can easily find a kernel representation of $\B_{MPUM}(w_d)$ by using the \codeinline{ss2r_datadriven} function that we previously discussed. This is all wrapped up in a function \codeinline{most_powerful_unfalsified_model}.
 
 \section{Data-Driven Interpolation and Approximation}
 
+The final set of features we were able to implement for the package was data interpolation/approximation. This is provided by the function \codeinline{data_interpolation}. It currently provides the features from exercises 8, 10, 11, 12 and 15. This was made easy by the \texttt{Lasso} Julia package \cite{lasso}, which provides an off-the-shelf implementation of Lasso regression with optional weights. Let us also note that exercises 10 and 11 required no additional work, due to the way previous features were implemented (notably \codeinline{ss2BT_hankel}).
 
+\begin{codebox}
+\begin{minted}{julia-repl}
+julia> sys = drss(3,2,1);
 
+julia> T = 20; T_d = 3*T + 3
+63
+
+julia> w_d = random_trajectory(sys, T_d);
+
+julia> w = random_trajectory(sys, T);
+
+julia> w_h = data_interpolation(w_d, w);
+
+julia> norm(w-w_h)
+0.0008574944534836991
+
+julia> w_h2 = data_interpolation(sys, w);
+
+julia> norm(w-w_h2)
+0.0009968508690741664
+
+julia> S = ones(size(w)); S[:,1:5] .= 0.0
+
+julia> w_h_3 = data_interpolation(w_d, w; S=S);
+
+julia> norm(w-w_h_3)
+1.1910918899668907
+\end{minted}
+\end{codebox}
+
+\section*{Discussion}
+While our implementation covers a basic set of features, it falls somewhat short of the initial goal of implementing the solutions to all the exercises plus a few additional ones. In addition, several of the functions are partially incorrect, notably the model based approaches for \codeinline{ss2BT} and \codeinline{ss2r}, as well as the computation of $\B_{MPUM}$.
+
+We are nevertheless optimistic that most of these issues should not take undue effort to solve, and that there a few low-hanging fruits in terms of additional features that could be implemented. In particular, more features could be added to \codeinline{data_interpolation} and wrapper functions could be built around it for specific use-cases such as simulation, missing data estimation and data-driven control.
+
+We conclude with a few comments on further design decisions for the high-level interface of the package.
+\begin{itemize}
+  \item Currently, the various functions for computing behavior representations return arrays. It might be useful to wrap those in dedicated types (e.g. \codeinline{DataDrivenRepresentation}, \codeinline{KernelRepresentation}), to provide explicit context for those arrays, as well as providing a common interface over them (e.g. a generic function for checking whether a given trajectory belongs to the behavior).
+  \item Many functions have model-based and data-driven variants. A common Julia pattern for such case where one wants to choose between multiple algorithms to solve the same problem is to define special types (e.g. \codeinline{ModelBased}, \codeinline{DataDriven}) that can then be passed as an argument to functions to choose which variant to use.\\
+  For example, we would use \codeinline{ss2BT(sys, T, ModelBased)} and \codeinline{ss2BT(sys, T, DataDriven)} instead of \codeinline{ss2BT_modelbased} and \codeinline{ss2BT_datadriven}. This would primarily make the high level interface cleaner.
+\end{itemize}
+
+\newpage
 \bibliography{sources}
 
 \end{document}
