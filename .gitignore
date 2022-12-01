@@ -6,3 +6,4 @@
 *.fls
 *.log
 _minted*
+*.synctex.gz
