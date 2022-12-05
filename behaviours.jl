@@ -53,18 +53,47 @@ end
 
 
 """
-    ss2BT_hankel(sys, T, L)
+    ss2BT_hankel(sys, w, L)
 
-Compute an orthonormal basis of ℬ_L using the Hankel matrix of a random trajectory of length `T``.
+Compute an orthonormal basis of ℬ_L using the Hankel matrix of a trajectory `w`.
 """
-function ss2BT_hankel(sys,T,L)
-    w = random_trajectory(sys,T)
+function ss2BT_hankel(sys,w,L)
     ℋ = hankel_matrix(w,L)
     return extract_basis(ℋ)
 end
 
-function ss2BT_hankel(sys, T)
+function ss2BT_hankel(sys, L)
     n,m,_ = sizes(sys)
-    return ss2BT_hankel(sys, (m+1)*T+n, T)
+    w = random_trajectory(sys,(m+1)*T+n)
+    return ss2BT_hankel(sys, w, L)
 end
-    
+
+function lag_model_based(sys)
+    n,_,p = sizes(sys)
+    A, C = sys.A, sys.C
+    O = zeros((n-1)*p, n)
+    l = 1
+    M = C
+    rows = axes(C,1)
+    O[rows .+ (l-1)*p,:] .= M
+    while rank(view(O,1:l*p,1:n)) < n && l < n
+        l += 1
+        M  = M*A
+        O[rows .+ (l-1)*p,:] .= M
+    end
+    return l
+end
+
+function lag_datadriven(sys)
+    n,m,_ = sizes(sys)
+    w = random_trajectory(sys, (m+1)*n +n)
+    l = n
+    while rank(ss2BT_hankel(sys,w,l)) == m*l + n
+        l -= 1
+    end
+    return l+1
+end
+
+function lag_datadriven(w)
+
+end
