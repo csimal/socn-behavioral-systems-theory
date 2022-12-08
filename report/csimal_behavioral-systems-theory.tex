@@ -69,7 +69,7 @@ The repository also contains a Jupyter Notebook showcasing the features of the p
 
 As an important notice, while we believe that the algorithms implemented in the package are correct in theory, some of the results we obtain are incorrect, and we could not correct them in time. That being said, we believe fixing these errors would not take a significant effort.
 
-\section*{Remarks on Notations}
+\section*{Remarks on Notation}
 In the notation used throughout this document, we depart slightly from the one used in the course material. In particular, we use the subscript notation $w = [w_0, w_1, \dots]$, rather than the functional one for elements of $(\R^q)^\N$.
 
 For the rest of this document, unless mentioned otherwise, we implicitly assume to be working with an LTI system with $n$ states, $m$ inputs $p$ outputs and lag $\ell$. Moreover, we define $q=m+p$ to be the number of observables of the system at our disposition.
@@ -77,7 +77,7 @@ For the rest of this document, unless mentioned otherwise, we implicitly assume 
 \section{Elementary Functions}
 In the making of this package, several utility functions where quickly needed. We document them here.
 \subsection*{Hankel and Multiplication Matrices}
-The Hankel and Multiplication matrix structures intervene at multiple points throughout the course. Based on the appendix to the exercises, we implemented functions for computing these matrices, and their orthogonal projections for both the scalar and block variants.
+The Hankel and Multiplication matrix structures intervene at multiple points throughout the course. Based on the appendix to the exercises, we implemented functions for computing these matrices, and their orthogonal projections for both the scalar and block variants. Passing a vector of matrices to \codeinline{hankel_matrix} computes the mosaic hankel matrix.
 
 \begin{codebox}
 \begin{minted}{julia-repl}
@@ -105,10 +105,10 @@ julia> hankel_matrix([1:5,1:3], 2)
 \end{minted}
 \end{codebox}
 
-Our implementation currently uses dense matrices filled out with the correct elements. This is somewhat inefficient due to the structure of e.g. the Hankel matrix. A good direction for future developments would be to implement those matrices in lazy form, which would simply reference the data from the original trajectory without allocating a new array. 
+Our implementation currently uses dense matrices filled out with the correct elements. This is somewhat inefficient due to the structure of e.g. the Hankel matrix. A good direction for future developments would be to implement those matrices in lazy form, which would simply reference the data from the original trajectory without allocating a new array. However, they would still need to be instantiated to compute their SVD, so it would be of marginal utility for this package.
 
 \subsection*{Random state space systems and random trajectories}
-For most of the basic features for Control Systems, rely on the \texttt{ControlSystems} package \cite{controlsystems_jl}, which provides an interface very similar to the Matlab Control Toolbox. One function that was missing however, was \codeinline{drss}, which generates a random discrete-time state space model. We based ourselves on the implementation from \cite{python-control}. This function takes as input a triplet $(n,m,p)$ denoting the desired numbers of states, inputs and outputs and generates a random state space model with those dimensions.
+For most of the basic features for Control Systems, we rely on the \texttt{ControlSystems} package \cite{controlsystems_jl}, which provides an interface very similar to the Matlab Control Toolbox. One function that was missing however, was \codeinline{drss}, which generates a random discrete-time state space model. We based ourselves on the implementation from \cite{python-control}. This function takes as input a triplet $(n,m,p)$ denoting the desired numbers of states, inputs and outputs and generates a random state space model with those dimensions.
 
 \begin{codebox}
 \begin{minted}{julia-repl}
@@ -203,7 +203,7 @@ The lag $\ell$ of a system can be defined as the smallest number of steps that n
 
 For the data-driven approach, we provide the function \codeinline{lag_datadriven} to compute the lag from a trajectory, both when we have prior knowledge of $n$ and $m$ and when we don't.
 
-Our scheme for computing $\ell$ is as follows. Given estimates of $m$ and $n$, we know that $\ell$ must be smaller than $n$, and we use bisection search to find the smallest $l$ such that $\rank \mathscr{H}_{l} = m*l + n$. When computing the lag of a state-space system, we have access to the exact values of $m$ and $n$, but when given only a finite trajectory $w_d$, we estimate $m$ and $n$ by finding the largest $l$ such that $\rank \mathscr{H}_l (w_d) < \rank \mathscr{H}_{l+1}(w_d)$. This lets us estimate the complexity of the behavior, even based on only a single sample.
+Our scheme for computing $\ell$ is as follows. Given estimates of $m$ and $n$, we know that $\ell$ must be smaller than $n$, and we use bisection search to find the smallest $l$ such that $\rank \mathscr{H}_{l} = m*l + n$. When computing the lag of a state-space system, we have access to the exact values of $m$ and $n$, but when given only a finite trajectory $w_d$, we estimate $m$ and $n$ by finding the largest $l$ such that $\rank \mathscr{H}_l (w_d) < \rank \mathscr{H}_{l+1}(w_d)$. This lets us estimate the complexity of the behavior, even based on only a single sample (This is slightly less efficient than using the theoretical bound used for the most powerful unfalsified model).
 
 \begin{codebox}
 \begin{minted}{julia-repl}
@@ -216,13 +216,31 @@ julia> w = random_trajectory(sys, 15);
 
 julia> lag_datadriven(w)
 3
+
+julia> complexity_datadriven(w)
+(2,3,3)
 \end{minted}
 \end{codebox}
 
 \section{Most Powerful Unfalsified Model}
-Computing the Most Powerful Unfalsified Model $\B_{MPUM}(w_d)$ of a finite trajectory $w_d$ is fairly straightforward. From a candidate $l$ between $1$ and $\ell_{\max} = \lfloor \frac{T+1}{q+1} \rfloor$, we estimate the corresponding $m$ and $n$ from $\rank \mathscr{H}_l (w_d)$ and $\rank \mathscr{H}_{l+1}(w_d)$, and iterate over all possible values of $l$ to find the minimizer. This feature is available through the function \codeinline{complexity_mpum}.
+Computing the Most Powerful Unfalsified Model $\B_{MPUM}(w_d)$ of a finite trajectory $w_d$ is fairly straightforward. From a candidate  $\ell_{\max} = \lfloor \frac{T+1}{q+1} \rfloor$, we estimate the corresponding $m$ and $n$ from $\rank \mathscr{H}_{\ell_{\max}} (w_d)$ and $\rank \mathscr{H}_{\ell_{\max}-1}(w_d)$, and use the \codeinline{lag_datadriven} function to find the lag. This feature is available through the function \codeinline{complexity_mpum}.
+
+\begin{codebox}
+\begin{minted}{julia-repl}
+julia> complexity_mpum(w)
+(2,3,3)  
+\end{minted}
+\end{codebox}
 
 Given the optimal lag $\ell$, we can easily find a kernel representation of $\B_{MPUM}(w_d)$ by using the \codeinline{ss2r_datadriven} function that we previously discussed. This is all wrapped up in a function \codeinline{most_powerful_unfalsified_model}.
+
+\begin{codebox}
+\begin{minted}{julia-repl}
+julia> most_powerful_unfalsified_model(w)
+1×12 adjoint(::Matrix{Float64}) with eltype Float64:
+  0.0138837  0.0230249  -0.000869775  …  3.84241e-16  1.40946e-16  0.699837
+\end{minted}
+\end{codebox}
 
 \section{Data-Driven Interpolation and Approximation}
 
@@ -242,32 +260,51 @@ julia> w = random_trajectory(sys, T);
 julia> w_h = data_interpolation(w_d, w);
 
 julia> norm(w-w_h)
-0.0008574944534836991
+2.903657141709827e-13
 
 julia> w_h2 = data_interpolation(sys, w);
 
 julia> norm(w-w_h2)
-0.0009968508690741664
+9.64816201495751e-13
+\end{minted}
+\end{codebox}
+Additionally, we implemented a wrapper around \codeinline{data_interpolation} for simulating trajectories, called \codeinline{data_simulation}. It takes a data trajectory $w_d$ as input along with an initial segment $w_{ini}$ and an input segment $w_{input}$ whose outputs are ignored (the number of outputs needs to be provided as well). The general version of the function accepts arrays with \codeinline{missing}\footnote{Julia provides a \codeinline{Missing} type for the specific purpose of denoting data with missing values.} or \codeinline{NaN} values and interprets them as missing values.
 
-julia> S = ones(size(w)); S[:,1:5] .= 0.0
+\begin{codebox}
+\begin{minted}{julia-repl}
+julia> w_ini = w[:,1:10]; w_input = w[:,11:end];
 
-julia> w_h_3 = data_interpolation(w_d, w; S=S);
+julia> w_s = data_simulation(w_d, w_ini, w_input, p)
 
-julia> norm(w-w_h_3)
-1.1910918899668907
+julia> norm(w-w_s)
+6.654231025147803e-15
+\end{minted}
+\end{codebox}
+
+This can then trivially be used to compute the impulse and step responses in a (mostly) datadriven way. This is provided by the functions \codeinline{impulse_response} and \codeinline{step_response}.
+
+\begin{codebox}
+\begin{minted}{julia-repl}
+julia> imp = impulse(sys, 11); # impulse response from ControlSystems
+
+julia> y_imp = impulse_response(sys, 11);
+
+julia> norm(y_imp - imp.y)
+1.4684766540114325e-14
 \end{minted}
 \end{codebox}
 
 \section*{Discussion}
-While our implementation covers a basic set of features, it falls somewhat short of the initial goal of implementing the solutions to all the exercises plus a few additional ones. In addition, several of the functions are partially incorrect, notably the model based approaches for \codeinline{ss2BT} and \codeinline{ss2r}, as well as the computation of $\B_{MPUM}$.
+While our implementation covers a basic set of features, it falls somewhat short of the initial goal of implementing the solutions to all the exercises plus a few additional ones. In addition, several of the functions are partially incorrect, notably the model based approaches for \codeinline{ss2BT} and \codeinline{ss2r}, which don't span the same subspaces as the data driven representations.
 
-We are nevertheless optimistic that most of these issues should not take undue effort to solve, and that there a few low-hanging fruits in terms of additional features that could be implemented. In particular, more features could be added to \codeinline{data_interpolation} and wrapper functions could be built around it for specific use-cases such as simulation, missing data estimation and data-driven control.
+We are nevertheless optimistic that most of these issues should not take undue effort to solve, and that there a few low-hanging fruits in terms of additional features that could be implemented. In particular more features can be built on top of \codeinline{data_interpolation}, based on the later sections of the exercises.
 
 We conclude with a few comments on further design decisions for the high-level interface of the package.
 \begin{itemize}
-  \item Currently, the various functions for computing behavior representations return arrays. It might be useful to wrap those in dedicated types (e.g. \codeinline{DataDrivenRepresentation}, \codeinline{KernelRepresentation}), to provide explicit context for those arrays, as well as providing a common interface over them (e.g. a generic function for checking whether a given trajectory belongs to the behavior).
+  \item Currently, the various functions for computing behavior representations return arrays. It might be useful to wrap those in dedicated types (e.g. \codeinline{DataDrivenRepresentation}, \codeinline{KernelRepresentation}), to provide explicit context for what those arrays represent, as well as providing a common interface over them (e.g. a generic function for checking whether a given trajectory belongs to the behavior).
   \item Many functions have model-based and data-driven variants. A common Julia pattern for such case where one wants to choose between multiple algorithms to solve the same problem is to define special types (e.g. \codeinline{ModelBased}, \codeinline{DataDriven}) that can then be passed as an argument to functions to choose which variant to use.\\
   For example, we would use \codeinline{ss2BT(sys, T, ModelBased)} and \codeinline{ss2BT(sys, T, DataDriven)} instead of \codeinline{ss2BT_modelbased} and \codeinline{ss2BT_datadriven}. This would primarily make the high level interface cleaner.
+  \item Most of the functions aren't particularly implemented with efficiency in mind (e.g. a lot of them allocate multiple arrays). This would limit the use of the package at scale, and generally makes the implementation less modular (see the implementations of the Hankel and Multiplication matrices for examples of what a better design might look like.)
 \end{itemize}
 
 \newpage
